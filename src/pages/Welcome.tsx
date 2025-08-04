@@ -31,7 +31,7 @@ export default function Welcome() {
       </div>
 
       {/* Tarjeta de bienvenida */}
-      <div className="bg-white rounded-2xl shadow-xl px-8 py-8 max-w-md w-full flex flex-col gap-6 items-center">
+      <div className="bg-white rounded-2xl shadow-xl px-8 py-8 max-w-[320px] w-full flex flex-col gap-6 items-center">
         <h2 className="text-2xl font-bold text-[#52AEB9] text-center">
           {t.welcome?.title || "Welcome to DESWG!"}
         </h2>
