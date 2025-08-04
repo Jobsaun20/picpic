@@ -84,14 +84,27 @@ export function useNotifications() {
   };
 
   // Marcar una notificación como leída
-  const markAsRead = async (id: string) => {
-    if (!user) return;
-    await supabase
-      .from("notifications")
-      .update({ read: true })
-      .eq("id", id);
-    fetchNotifications();
-  };
+const markAsRead = async (id: string) => {
+  if (!user) return;
+
+  const { error: updateError } = await supabase
+    .from("notifications")
+    .update({ read: true })
+    .eq("id", id)
+    .eq("user_id", user.id);
+
+  if (updateError) {
+    console.error("Error al marcar como leída:", updateError);
+    return;
+  }
+
+  // Actualizar localmente sin tener que hacer un fetch completo
+  setNotifications((prev) =>
+    prev.map((n) => (n.id === id ? { ...n, read: true } : n))
+  );
+
+  setUnreadCount((prev) => Math.max(prev - 1, 0)); // evitar negativos
+};
 
   // Borrar todas las notificaciones del usuario
   const deleteAll = async () => {
