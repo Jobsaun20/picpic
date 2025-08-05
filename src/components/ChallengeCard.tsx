@@ -175,18 +175,25 @@ export function ChallengeCard({
       </div>
       {/* Precio abajo, alineado a la izquierda */}
       {/* Bloque de precio con "Penalty:" */}
-<div className="flex flex-col items-end w-full mt-2">
-  <div className="flex items-baseline gap-1">
-    <span className="text-xs text-gray-500 font-semibold">Penalty:</span>
-    <span className="text-3xl font-extrabold text-purple-700 leading-none">
-      {challenge.amount}
+<div className="flex flex-col items-end w-full">
+  <div
+    className="flex flex-wrap items-baseline gap-1 justify-end w-full break-words max-w-full"
+    style={{ wordBreak: "break-word" }}
+  >
+    <span className="text-xs text-gray-500 font-semibold">{t.challengeCard.penalty}:</span>
+    <span
+      className="text-3xl font-extrabold text-purple-700 leading-none ml-2"
+      style={{ wordBreak: "break-word", overflowWrap: "anywhere", whiteSpace: "normal" }}
+    >
+      {/* Número y € juntos, sin espacio */}
+      {challenge.amount + " "+"CHF"}
     </span>
-    <span className="text-xl text-purple-700 font-bold">€</span>
   </div>
 </div>
     </div>
   </div>
 </CardHeader>
+
 
 
   <CardContent>
