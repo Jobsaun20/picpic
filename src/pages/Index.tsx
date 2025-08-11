@@ -36,7 +36,9 @@ import { useChallenges } from "@/hooks/useChallenges";
 import { ScrollText, Zap } from "lucide-react";
 import { FineCard } from "@/components/FineCard"; // Ajusta la ruta si es distinta
 
-
+// ======== AÑADIDO: import del tutorial =========
+import IndexTutorialOverlay from "@/components/IndexTutorialOverlay";
+// ===============================================
 
 
 // URL de tu Edge Function en Supabase
@@ -146,6 +148,16 @@ export default function Index() {
   const [earnedBadges, setEarnedBadges] = useState([]);
   const [badgesLoading, setBadgesLoading] = useState(true);
   
+  // ======== AÑADIDO: estado para mostrar el tutorial solo 1ª vez ========
+  const [showTutorial, setShowTutorial] = useState(false);
+  useEffect(() => {
+    if (user?.id) {
+      const key = `tutorialDone:${user.id}`;
+      const already = localStorage.getItem(key);
+      if (!already) setShowTutorial(true);
+    }
+  }, [user?.id]);
+  // ======================================================================
 
   // Colores para cada segmento
 const COLORS_FINES = ["#FF718B", "#52AEB9"];
@@ -883,6 +895,17 @@ const pendingFinesToPay = finesList.filter(
       />
       {/* Footer siempre al final */}
       {/* <Footer /> */}
+
+      {/* ======== AÑADIDO: Mostrar el tutorial solo 1ª vez tras login ======== */}
+      {showTutorial && user && (
+        <IndexTutorialOverlay
+          user={user}
+          profileId={profile?.id}
+          onFinish={() => setShowTutorial(false)}
+          onOpenShare={() => setShowShareModal(true)}
+        />
+      )}
+      {/* ==================================================================== */}
     </div>
   );
 }
