@@ -13,12 +13,12 @@ export default function Impressum() {
           <p>
             <b>Betreiber dieser Plattform:</b><br />
             DESWG – Eine Plattform für soziale Unterhaltung<br />
-            [info@DESWG-app.com]<br />
+            [infodeswg@gmail.com]<br />
             Luzern, Schweiz
           </p>
           <p>
             <b>Kontakt:</b><br />
-            E-Mail: info@DESWG-app.com
+            E-Mail: infodeswg@gmail.com
           </p>
           <p>
             <b>Verantwortlich für den Inhalt:</b><br />
