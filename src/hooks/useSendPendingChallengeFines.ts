@@ -6,13 +6,6 @@ import locales from "@/locales";
 
 const PUSH_ENDPOINT = import.meta.env.VITE_PUSH_SERVER_URL;
 
-/**
- * Hook global para enviar automáticamente las multas pendientes
- * al terminar retos tipo "challenge". Pásale la lista de retos para
- * asegurar que detecta los cambios.
- *
- * @param {any[]} challenges - Lista de retos (opcional, pero recomendable).
- */
 export function useSendPendingChallengeFines(challenges: any[] = []) {
   const { user } = useAuthContext();
   const runningRef = useRef(false);
@@ -20,16 +13,15 @@ export function useSendPendingChallengeFines(challenges: any[] = []) {
   useEffect(() => {
     if (!user) return;
 
-    // Si no hay ningún challenge "finished" de este usuario, no hagas nada.
-    if (challenges.length && !challenges.some(
-      c => c.status === "finished" && c.creator_id === user.id
-    )) return;
+    if (
+      challenges.length &&
+      !challenges.some((c) => c.status === "finished" && c.creator_id === user.id)
+    ) return;
 
     if (runningRef.current) return;
     runningRef.current = true;
 
     const process = async () => {
-      // Buscar multas por enviar, solo para los retos creados por este usuario
       const { data: pendingFines, error } = await supabase
         .from("challenge_fines_candidates")
         .select("*")
@@ -40,23 +32,50 @@ export function useSendPendingChallengeFines(challenges: any[] = []) {
         runningRef.current = false;
         return;
       }
-      if (!pendingFines || !pendingFines.length) {
+      if (!pendingFines?.length) {
         runningRef.current = false;
         return;
       }
 
       for (const fine of pendingFines) {
-        // Verifica que NO exista ya la multa para este reto y usuario
+        // 1) Busca un COMPLETED (ganador) para este challenge
+        const { data: winner } = await supabase
+          .from("challenge_participants")
+          .select("user_id")
+          .eq("challenge_id", fine.challenge_id)
+          .eq("completed", true)
+          .neq("user_id", fine.recipient_id) // no puede ser el que paga
+          .limit(1)
+          .maybeSingle();
+
+        if (!winner?.user_id) {
+          console.warn("Sin ganador para challenge", fine.challenge_id);
+          continue;
+        }
+
+        // 2) Trae su perfil para nombre/teléfono
+        const { data: wProfile } = await supabase
+          .from("users")
+          .select("username, email, phone")
+          .eq("id", winner.user_id)
+          .maybeSingle();
+
+        const winnerId = winner.user_id;
+        const winnerName =
+          wProfile?.username || wProfile?.email || fine.sender_name || "User";
+        const winnerPhone = wProfile?.phone || "";
+
+        // 3) Evita duplicado winner -> loser en ese challenge
         const { data: exists } = await supabase
           .from("fines")
           .select("id")
-          .eq("sender_id", fine.sender_id)
+          .eq("sender_id", winnerId)
           .eq("recipient_id", fine.recipient_id)
           .eq("challenge_id", fine.challenge_id);
 
-        if (exists && exists.length) continue;
+        if (exists?.length) continue;
 
-        // Busca idioma del receptor
+        // 4) Idioma del receptor y motivo
         const { data: recipientData } = await supabase
           .from("users")
           .select("language")
@@ -64,16 +83,14 @@ export function useSendPendingChallengeFines(challenges: any[] = []) {
           .maybeSingle();
         const lang = recipientData?.language || "es";
         const locale = locales[lang] || locales["es"];
-        const reason = locale.challengeCard.challengeNotCompleted.replace(
-          "{title}",
-          fine.challenge_title || "Reto"
-        );
+        const reason = locale.challengeCard.challengeNotCompleted
+          .replace("{title}", fine.challenge_title || "Reto");
 
-        // Inserta la multa
+        // 5) Inserta la multa con sender = GANADOR
         const fineObj = {
-          sender_id: fine.sender_id,
-          sender_name: fine.sender_name,
-          sender_phone: fine.sender_phone,
+          sender_id: winnerId,
+          sender_name: winnerName,
+          sender_phone: winnerPhone,
           recipient_id: fine.recipient_id,
           recipient_name: fine.recipient_name,
           recipient_email: fine.recipient_email,
@@ -84,20 +101,21 @@ export function useSendPendingChallengeFines(challenges: any[] = []) {
           type: "challenge",
           challenge_id: fine.challenge_id,
         };
+
         const { error: insertError } = await supabase.from("fines").insert([fineObj]);
         if (insertError) {
           console.error("Error insertando multa:", insertError);
           continue;
         }
 
-        // Notifica PUSH al receptor, en su idioma
+        // 6) Push al perdedor (mostrando al ganador como sender)
         function templateReplace(str: string, vars: Record<string, string | number>) {
           return str.replace(/{{(.*?)}}/g, (_, key) => String(vars[key.trim()] ?? ""));
         }
         const notifPayload = {
           title: locale.challengeCard.newFineRecived,
           body: templateReplace(locale.challengeCard.fineReceivedBody, {
-            sender: fine.sender_name,
+            sender: winnerName,
             amount: fine.amount,
             reason,
           }),
@@ -115,9 +133,7 @@ export function useSendPendingChallengeFines(challenges: any[] = []) {
               return typeof s.subscription === "string"
                 ? JSON.parse(s.subscription)
                 : s.subscription;
-            } catch {
-              return null;
-            }
+            } catch { return null; }
           })
           .filter((s: any) => s && s.endpoint && s.keys?.auth && s.keys?.p256dh);
 
@@ -126,10 +142,7 @@ export function useSendPendingChallengeFines(challenges: any[] = []) {
             await fetch(PUSH_ENDPOINT, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                subs: subscription,
-                notif: notifPayload,
-              }),
+              body: JSON.stringify({ subs: subscription, notif: notifPayload }),
             });
           } catch (err) {
             console.error("Error enviando push:", err);
@@ -141,10 +154,8 @@ export function useSendPendingChallengeFines(challenges: any[] = []) {
     };
 
     process();
-    // Si quieres máxima robustez, puedes usar un intervalo aquí.
-    // const interval = setInterval(process, 60000);
-    // return () => clearInterval(interval);
+    const interval = setInterval(process, 60000);
+    return () => clearInterval(interval);
   // eslint-disable-next-line
   }, [user, JSON.stringify(challenges)]);
 }
-
